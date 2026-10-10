@@ -1,0 +1,12 @@
+# Python
+backend/.venv/
+__pycache__/
+.pytest_cache/
+backend/runs/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Env
+.env

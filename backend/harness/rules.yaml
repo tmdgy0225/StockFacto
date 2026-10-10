@@ -1,0 +1,67 @@
+# 하네스 규칙의 단일 진실 공급원(Single Source of Truth).
+# Linter · Sandbox · Quality Gate · 에이전트 프롬프트가 모두 이 파일을 읽는다.
+# 규칙을 추가/변경하면 루트의 AGENTS.md 에도 같은 ID로 반영해야 한다 (tests/test_agents_md_sync.py 가 검사).
+version: 1
+
+risk:
+  weight_cap:              # DART 팩트 검증 상태별 단일 종목 최대 비중
+    VERIFIED: 0.30
+    UNVERIFIED: 0.05
+  max_mdd: 0.10            # 백테스트 최대 낙폭(MDD) 한도
+  stop_loss:
+    min_distance: 0.005    # 진입가 대비 손절 거리 하한 (0.5%)
+    max_distance: 0.15     # 진입가 대비 손절 거리 상한 (15%)
+
+fact_check:
+  window_days: 7           # 소문 발생일 ±N일 안의 공시만 근거로 인정
+  claim_keywords:          # 주장 유형 → DART 보고서명 키워드
+    수주: [단일판매, 공급계약]
+    공급계약: [단일판매, 공급계약]
+    인수합병: [합병, 주식양수도, 타법인주식]
+    유상증자: [유상증자]
+    실적: [잠정, 매출액또는손익구조]
+
+healing:
+  max_attempts: 5
+  no_progress_repeats: 2   # 동일한 위반 조합이 연속 N회 반복되면 조기 중단(에스컬레이션)
+
+sandbox:
+  timeout_sec: 10
+  allowed_imports: [math, statistics]
+  forbidden_names: [exec, eval, compile, open, __import__, getattr, setattr, delattr,
+                    globals, locals, vars, input, breakpoint, exit, quit, help,
+                    memoryview, __builtins__]
+
+rules:
+  - id: R-000
+    stage: lint
+    title: 문법 오류 금지
+    fix_hint: SyntaxError 위치의 문법을 수정하세요.
+  - id: R-001
+    stage: lint+sandbox
+    title: 모든 매수 주문에 손절선(stop_loss) 필수
+    fix_hint: 'Order(side="buy", ..., stop_loss=bar.close * 0.97) 처럼 매수 주문마다 stop_loss를 지정하세요.'
+  - id: R-002
+    stage: lint+sandbox+gate
+    title: 종목 비중은 하네스가 주입한 상한(ctx.max_weight) 이하
+    fix_hint: 'weight=ctx.max_weight 또는 그보다 작은 값을 사용하세요. 비중 상한은 DART 검증 상태로 하네스가 결정합니다.'
+  - id: R-003
+    stage: gate
+    title: 백테스트 MDD 10% 이하
+    fix_hint: '비중을 줄이거나(weight=ctx.max_weight * 0.5) 손절 거리를 좁혀 최대 낙폭을 낮추세요.'
+  - id: R-004
+    stage: lint
+    title: 금지 모듈·함수·내부 속성 접근 및 ctx 변경 금지
+    fix_hint: 'math, statistics 외 import, exec/eval/open 등 금지 함수, __dunder__ 접근, ctx 속성 대입을 제거하세요.'
+  - id: R-005
+    stage: lint+sandbox
+    title: 전략 계약(Strategy.on_bar → Order) 준수
+    fix_hint: 'class Strategy 에 def on_bar(self, bar, ctx) 를 정의하고 Order(side=..., ...) 를 키워드 인자로만 반환하세요.'
+  - id: R-006
+    stage: lint+sandbox
+    title: 손절 거리는 진입가 대비 0.5%~15%
+    fix_hint: 'stop_loss=bar.close * 0.97 처럼 진입가 아래 0.5%~15% 범위로 설정하세요.'
+  - id: R-007
+    stage: sandbox
+    title: 샌드박스 실행 오류·시간 초과 금지
+    fix_hint: 오류 메시지와 줄 번호를 참고해 정의되지 않은 변수나 무한 루프를 수정하세요.
