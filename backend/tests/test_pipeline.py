@@ -70,6 +70,32 @@ def test_every_harness_pass_has_zero_violations():
             assert trace.attempts[-1].violations == [], case["id"]
 
 
+def test_healing_uses_patches_and_matches_rewrite_outcome():
+    case = get_case("CASE-06")  # 문법 오류 → 계약 위반 → 통과 (3회)
+    patched = run_pipeline(case, MockAgent(case), "harness", write=False)
+    rewritten = run_pipeline(case, MockAgent(case), "harness", write=False, healing_mode="rewrite")
+    assert [a.edit_mode for a in patched.attempts] == ["initial", "patch", "patch"]
+    assert patched.status == rewritten.status == "PASSED"
+    assert patched.attempts[-1].code == rewritten.attempts[-1].code
+    assert sum(a.tokens["output"] for a in patched.attempts[1:]) < sum(a.tokens["output"] for a in rewritten.attempts[1:])
+
+
+def test_invalid_patch_is_rejected_as_r008():
+    from harness.agents import AgentOutput
+
+    class BadPatcher(MockAgent):
+        def generate(self, req):
+            out = super().generate(req)
+            if req.edit_mode == "patch":
+                return AgentOutput("", out.input_tokens, 10, patches=[{"op": "replace", "start": 999, "end": 999, "code": "x"}])
+            return out
+
+    case = get_case("CASE-01")
+    trace = run_pipeline(case, BadPatcher(case), "harness", write=False)
+    assert trace.status == "ESCALATED"  # 잘못된 패치만 반복 → 진전 없음 → 출하 차단
+    assert {v["rule_id"] for v in trace.attempts[1].violations} == {"R-008"}
+
+
 def test_strategy_rules_mention_every_rule():
     md = load_strategy_rules()
     for rule in load_rules()["rules"]:

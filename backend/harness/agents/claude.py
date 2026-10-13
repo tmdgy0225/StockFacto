@@ -9,14 +9,14 @@ import os
 
 import anthropic
 
-from .base import AgentError, AgentOutput, AgentRequest, extract_code
+from .base import AgentError, AgentOutput, AgentRequest, extract_code, extract_patches
 
 
 class ClaudeAgent:
     name = "claude"
 
-    def __init__(self, model: str | None = None):
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str | None = None, client: anthropic.Anthropic | None = None):
+        self.client = client or anthropic.Anthropic()
         self.model = model or os.environ.get("HARNESS_MODEL", "claude-opus-5-5")
 
     def generate(self, req: AgentRequest) -> AgentOutput:
@@ -43,4 +43,10 @@ class ClaudeAgent:
         text = "".join(block.text for block in response.content if block.type == "text")
         if not text.strip():
             raise AgentError(f"빈 응답 (stop_reason={response.stop_reason})")
-        return AgentOutput(extract_code(text), response.usage.input_tokens, response.usage.output_tokens)
+        usage = response.usage
+        if req.edit_mode == "patch" and req.previous_code is not None:
+            patches = extract_patches(text)
+            if patches is not None:
+                return AgentOutput("", usage.input_tokens, usage.output_tokens, patches=patches)
+            # 패치 대신 전체 코드를 낸 경우: 하네스가 rewrite 로 기록하고 그대로 검증한다.
+        return AgentOutput(extract_code(text), usage.input_tokens, usage.output_tokens)

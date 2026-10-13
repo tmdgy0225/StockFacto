@@ -65,3 +65,7 @@ rules:
     stage: sandbox
     title: 샌드박스 실행 오류·시간 초과 금지
     fix_hint: 오류 메시지와 줄 번호를 참고해 정의되지 않은 변수나 무한 루프를 수정하세요.
+  - id: R-008
+    stage: patch
+    title: patch_file 형식 준수
+    fix_hint: '{"patches": [{"op": "replace", "start": N, "end": M, "code": "..."}]} 형식으로, 직전 코드의 줄 번호 범위 안에서 겹치지 않게 출력하세요.'

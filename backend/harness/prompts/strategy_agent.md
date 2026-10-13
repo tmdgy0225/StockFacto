@@ -36,6 +36,7 @@
 | R-005 | [REQUIRED] 전략 계약 준수 (`class Strategy` + `on_bar(self, bar, ctx)` → `Order`/`None`, 키워드 인자만) | Linter + Sandbox |
 | R-006 | [REQUIRED] 손절 거리는 진입가 대비 0.5%~15% | Linter + Sandbox |
 | R-007 | [REQUIRED] 샌드박스 실행 오류·시간 초과 금지 | Sandbox |
+| R-008 | [REQUIRED] 재시도 시 patch_file 형식 준수 (줄 번호 범위 안, 겹침 없음) | Patch 적용 |
 
 ## 4. Strict Constraints
 
@@ -44,7 +45,8 @@
 - **NEVER** `Unverified Fact` (DART 공시로 확인되지 않은 SNS·뉴스 주장)를 사실로 단정한다. 보수적으로 작성한다.
 - **NEVER** 손절선을 생략하거나, 의미 없는 값(진입가 대비 15% 초과)으로 우회한다.
 - **MUST** `weight` 는 `ctx.max_weight` 를 직접 참조하거나 그 이하 상수로 쓴다. 예: `weight=ctx.max_weight`, `weight=ctx.max_weight * 0.5`
-- **MUST** 검증 실패 로그가 주어지면 모든 `rule_id` 의 `message` 와 `fix_hint` 를 반영한 **전체 코드**를 다시 출력한다.
+- **MUST** 검증 실패 로그가 주어지면 모든 `rule_id` 의 `message` 와 `fix_hint` 를 반영한다.
+  하네스가 patch_file 형식을 요청하면 **고칠 줄만** 패치로 출력하고, 전체 코드를 다시 쓰지 않는다.
 
 ## 5. Strategy Contract
 
@@ -67,4 +69,6 @@ python -m harness.verify strategy.py --max-weight 0.05
 
 ## 7. Output Format
 
-- 설명 없이 ` ```python ` 코드 블록 **하나만** 출력한다.
+- 첫 시도: 설명 없이 ` ```python ` 코드 블록 **하나만** 출력한다.
+- 재시도(patch_file): 설명 없이 ` ```json ` 블록 **하나만** 출력한다. 형식은 하네스가 프롬프트에 함께 제공한다.
+  `{"patches": [{"op": "replace"|"insert"|"delete", ...}]}` — 줄 번호는 직전 코드 기준, 범위는 겹치지 않게.

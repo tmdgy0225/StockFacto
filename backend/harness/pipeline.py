@@ -14,18 +14,21 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 
+from . import failures
 from .agents import AgentError, AgentRequest, StrategyAgent
 from .agents import prompt as prompts
 from .collect import collect
 from .config import load_rules
 from .context import build_context
 from .handoff import write_artifacts
+from .patch import PatchError, apply_patches
 from .plan import make_plan
 from .prices import generate_bars
+from .review import Reviewer, run_review
 from .verify.lint import lint
 from .verify.quality_gate import evaluate
 from .verify.sandbox import run_backtest
-from .violations import Violation, fingerprint
+from .violations import Violation, fingerprint, violation
 
 EventSink = Callable[[dict], None]
 
@@ -41,6 +44,8 @@ class Attempt:
     equity_curve: list[float] = field(default_factory=list)
     stage_ms: dict = field(default_factory=dict)
     tokens: dict = field(default_factory=dict)
+    edit_mode: str = "initial"  # initial | patch | rewrite
+    patches: list[dict] | None = None
 
 
 @dataclass
@@ -58,6 +63,7 @@ class RunTrace:
     attempts: list[Attempt] = field(default_factory=list)
     escalation_reason: str | None = None
     approval: str | None = None  # PENDING | APPROVED | REJECTED
+    review: dict | None = None  # 추론적 센서(LLM 리뷰어) 경고 — 판정에 영향 없음
     finished_at: str | None = None
     duration_ms: int = 0
 
@@ -70,7 +76,8 @@ def new_run_id() -> str:
 
 
 def run_pipeline(case: dict, agent: StrategyAgent, mode: str = "harness", sink: EventSink | None = None,
-                 run_id: str | None = None, write: bool = True) -> RunTrace:
+                 run_id: str | None = None, write: bool = True, healing_mode: str = "patch",
+                 use_memory: bool = False, reviewer: Reviewer | None = None) -> RunTrace:
     emit = sink or (lambda _e: None)
     started = time.perf_counter()
     trace = RunTrace(run_id or new_run_id(), case["id"], case["title"], mode, agent.name, _now())
@@ -95,8 +102,16 @@ def run_pipeline(case: dict, agent: StrategyAgent, mode: str = "harness", sink: 
         else:
             stage("context", "done", fact_status=ctx["fact_status"], max_weight=ctx["max_weight"], tokens=ctx["tokens"])
             trace.plan = make_plan(case, ctx)
+            memory = failures.render_for_prompt() if use_memory else None
+            trace.plan["failure_memory"] = [rule_id for rule_id, _ in failures.top()] if memory else []
             stage("plan", "done", **trace.plan)
-            _run_harness(case, agent, ctx, bars, trace, stage, emit)
+            _run_harness(case, agent, ctx, bars, trace, stage, emit, healing_mode, memory)
+            if trace.status == "PASSED":
+                # 추론적 센서: 경고만 남기고 판정은 바꾸지 않는다 (ADR-0001)
+                stage("review", "running")
+                trace.review = run_review(reviewer, trace.attempts[-1].code, trace.plan, ctx["compact"])
+                stage("review", "skip" if trace.review["status"] == "skipped" else "done",
+                      warnings=len(trace.review["warnings"]), review_status=trace.review["status"])
     except AgentError as e:
         trace.status, trace.escalation_reason = "ERROR", str(e)
         stage("execute", "fail", message=str(e))
@@ -105,12 +120,14 @@ def run_pipeline(case: dict, agent: StrategyAgent, mode: str = "harness", sink: 
     trace.duration_ms = int((time.perf_counter() - started) * 1000)
     if write:
         write_artifacts(trace)
+        if mode == "harness" and trace.attempts:
+            failures.record([asdict(a) for a in trace.attempts])
         stage("handoff", "done", run_id=trace.run_id)
     emit({"type": "done", "trace": trace.to_dict()})
     return trace
 
 
-def _run_harness(case, agent, ctx, bars, trace: RunTrace, stage, emit) -> None:
+def _run_harness(case, agent, ctx, bars, trace: RunTrace, stage, emit, healing_mode: str, memory: str | None) -> None:
     healing = load_rules()["healing"]
     max_weight = ctx["max_weight"]
     system = prompts.harness_system()
@@ -120,11 +137,21 @@ def _run_harness(case, agent, ctx, bars, trace: RunTrace, stage, emit) -> None:
 
     for n in range(1, healing["max_attempts"] + 1):
         stage("execute", "running", n)
-        user = prompts.harness_user(trace.plan, ctx, feedback, previous_code)
-        out = agent.generate(AgentRequest("harness", n, system, user, feedback, previous_code))
-        stage("execute", "done", n, input_tokens=out.input_tokens, output_tokens=out.output_tokens)
+        edit_mode = healing_mode if feedback else "rewrite"
+        user = prompts.harness_user(trace.plan, ctx, feedback, previous_code, edit_mode, memory)
+        out = agent.generate(AgentRequest("harness", n, system, user, feedback, previous_code, edit_mode))
+        stage("execute", "done", n, input_tokens=out.input_tokens, output_tokens=out.output_tokens,
+              patches=len(out.patches) if out.patches is not None else None)
 
-        attempt = _verify(n, out, previous_code, bars, max_weight, case["symbol"], enforce=True, stage=stage)
+        code, patch_error = _resolve_code(out, previous_code)
+        if patch_error:
+            # 잘못된 패치는 적용하지 않고 R-008 로 되돌려 보낸다(fail-closed). 검증 단계는 건너뛴다.
+            stage("lint", "skip", n)
+            attempt = Attempt(n=n, code=previous_code or "", diff="", violations=[patch_error.to_dict()], passed=False,
+                              tokens={"input": out.input_tokens, "output": out.output_tokens},
+                              edit_mode="patch", patches=out.patches)
+        else:
+            attempt = _verify(n, code, out, previous_code, bars, max_weight, case["symbol"], enforce=True, stage=stage)
         trace.attempts.append(attempt)
         emit({"type": "attempt", "attempt": asdict(attempt)})
 
@@ -153,17 +180,27 @@ def _run_control(case, agent, ctx, bars, trace: RunTrace, stage, emit) -> None:
     out = agent.generate(AgentRequest("control", 1, prompts.control_system(), prompts.control_user(case, ctx)))
     stage("execute", "done", 1, input_tokens=out.input_tokens, output_tokens=out.output_tokens)
     # 대조군은 검증 결과와 무관하게 출하된다. 검증기는 관찰 전용(enforce=False)으로 실제 위험을 계측한다.
-    attempt = _verify(1, out, None, bars, ctx["max_weight"], case["symbol"], enforce=False, stage=stage)
+    attempt = _verify(1, out.code, out, None, bars, ctx["max_weight"], case["symbol"], enforce=False, stage=stage)
     trace.attempts.append(attempt)
     emit({"type": "attempt", "attempt": asdict(attempt)})
     trace.status, trace.unsafe = "RELEASED", not attempt.passed
 
 
-def _verify(n, out, previous_code, bars, max_weight, symbol, enforce, stage) -> Attempt:
+def _resolve_code(out, previous_code: str | None) -> tuple[str, Violation | None]:
+    """에이전트 출력(전체 코드 또는 패치)을 검증할 코드로 확정한다."""
+    if out.patches is None:
+        return out.code, None
+    try:
+        return apply_patches(previous_code or "", out.patches), None
+    except PatchError as e:
+        return previous_code or "", violation("R-008", "patch", str(e))
+
+
+def _verify(n, code, out, previous_code, bars, max_weight, symbol, enforce, stage) -> Attempt:
     stage_ms: dict[str, int] = {}
     t0 = time.perf_counter()
     stage("lint", "running", n)
-    violations = lint(out.code, max_weight)
+    violations = lint(code, max_weight)
     stage_ms["lint"] = int((time.perf_counter() - t0) * 1000)
     metrics, curve = None, []
 
@@ -176,7 +213,7 @@ def _verify(n, out, previous_code, bars, max_weight, symbol, enforce, stage) -> 
     else:
         stage("lint", "fail" if violations else "pass", n, violations=[v.to_dict() for v in violations])
         stage("sandbox", "running", n)
-        result = run_backtest(out.code, bars, max_weight, symbol, enforce=enforce)
+        result = run_backtest(code, bars, max_weight, symbol, enforce=enforce)
         stage_ms["sandbox"] = result.duration_ms
         metrics, curve = result.metrics, result.equity_curve
         violations += result.violations
@@ -190,13 +227,15 @@ def _verify(n, out, previous_code, bars, max_weight, symbol, enforce, stage) -> 
             stage("gate", "skip", n)
 
     diff = "".join(difflib.unified_diff(
-        (previous_code or "").splitlines(keepends=True), out.code.splitlines(keepends=True),
+        (previous_code or "").splitlines(keepends=True), code.splitlines(keepends=True),
         fromfile=f"attempt_{n - 1}.py", tofile=f"attempt_{n}.py",
     )) if previous_code else ""
     return Attempt(
-        n=n, code=out.code, diff=diff, violations=[v.to_dict() for v in _unique(violations)],
+        n=n, code=code, diff=diff, violations=[v.to_dict() for v in _unique(violations)],
         passed=not violations, metrics=metrics, equity_curve=curve, stage_ms=stage_ms,
         tokens={"input": out.input_tokens, "output": out.output_tokens},
+        edit_mode="initial" if previous_code is None else ("patch" if out.patches is not None else "rewrite"),
+        patches=out.patches,
     )
 
 

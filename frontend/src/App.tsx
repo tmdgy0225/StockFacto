@@ -11,6 +11,7 @@ const STAGES: { id: StageName; label: string }[] = [
   { id: "sandbox", label: "Sandbox" },
   { id: "gate", label: "Quality Gate" },
   { id: "heal", label: "Self-Healing" },
+  { id: "review", label: "LLM 리뷰(경고만)" },
   { id: "handoff", label: "Handoff" },
 ];
 
@@ -139,7 +140,7 @@ function RunView() {
 }
 
 function Pipeline({ state, mode }: { state: Partial<Record<StageName, { status: string; attempt: number | null }>>; mode: Mode }) {
-  const visible = mode === "control" ? STAGES.filter((s) => !["context", "plan", "heal"].includes(s.id)) : STAGES;
+  const visible = mode === "control" ? STAGES.filter((s) => !["context", "plan", "heal", "review"].includes(s.id)) : STAGES;
   return (
     <div className="panel pipeline">
       {visible.map((s) => {
@@ -187,12 +188,15 @@ function ContextCard({ trace }: { trace: Trace }) {
       {plan && plan.conflicts.length > 0 && (
         <ul className="conflicts">{plan.conflicts.map((c) => <li key={c}>{c}</li>)}</ul>
       )}
+      {plan && plan.failure_memory.length > 0 && (
+        <p className="muted small">과거 실패 기록 주입: {plan.failure_memory.join(", ")} (이전 런에서 반복된 위반을 에이전트에 미리 경고)</p>
+      )}
     </div>
   );
 }
 
 function AttemptCard({ attempt, isLast }: { attempt: Attempt; isLast: boolean }) {
-  const [view, setView] = useState<"code" | "diff">(attempt.diff ? "diff" : "code");
+  const [view, setView] = useState<"code" | "diff" | "patch">(attempt.patches ? "patch" : attempt.diff ? "diff" : "code");
   const [open, setOpen] = useState(isLast);
   useEffect(() => setOpen(isLast), [isLast]);
   const m = attempt.metrics;
@@ -201,6 +205,9 @@ function AttemptCard({ attempt, isLast }: { attempt: Attempt; isLast: boolean })
       <button className="attempt-head" onClick={() => setOpen(!open)}>
         <span className="badge">{attempt.passed ? "PASS" : "FAIL"}</span>
         <b>시도 #{attempt.n}</b>
+        {attempt.edit_mode !== "initial" && (
+          <span className="mode-tag">{attempt.edit_mode === "patch" ? `patch_file ${attempt.patches?.length ?? 0}건` : "전체 재작성"}</span>
+        )}
         <span className="muted">{attempt.violations.map((v) => v.rule_id).filter((x, i, a) => a.indexOf(x) === i).join(" · ") || "위반 없음"}</span>
         <span className="muted right">tokens in {attempt.tokens.input} / out {attempt.tokens.output}</span>
       </button>
@@ -234,10 +241,13 @@ function AttemptCard({ attempt, isLast }: { attempt: Attempt; isLast: boolean })
           <div className="code-tabs">
             <button className={view === "code" ? "on" : ""} onClick={() => setView("code")}>코드</button>
             {attempt.diff && <button className={view === "diff" ? "on" : ""} onClick={() => setView("diff")}>직전 시도 대비 diff</button>}
+            {attempt.patches && <button className={view === "patch" ? "on" : ""} onClick={() => setView("patch")}>에이전트 패치 (JSON)</button>}
           </div>
           <pre className="code">
             {view === "code"
               ? attempt.code
+              : view === "patch"
+              ? JSON.stringify({ patches: attempt.patches }, null, 2)
               : attempt.diff.split("\n").map((line, i) => (
                   <span key={i} className={line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : ""}>{line + "\n"}</span>
                 ))}
@@ -298,6 +308,14 @@ function ResultCard({ trace, onDecided }: { trace: Trace; onDecided: (t: Trace) 
       <h3>{title}</h3>
       <p>{body}</p>
       <p className="muted">run_id: {trace.run_id} · {trace.duration_ms}ms · 산출물: backend/runs/{trace.run_id}/</p>
+      {trace.review && trace.review.status !== "skipped" && (
+        <div className="review">
+          <b>LLM 리뷰어 경고 (판정에는 영향 없음, 승인 시 참고)</b>
+          {trace.review.status === "error" && <p className="muted small">리뷰 실패: {trace.review.error}</p>}
+          {trace.review.status === "ok" && trace.review.warnings.length === 0 && <p className="muted small">의미적 문제를 찾지 못했습니다.</p>}
+          <ul>{trace.review.warnings.map((w, i) => <li key={i} className={`sev-${w.severity}`}>[{w.severity}] {w.message}</li>)}</ul>
+        </div>
+      )}
       {trace.status === "PASSED" && trace.approval === "PENDING" && (
         <div className="actions">
           <button className="primary" disabled={busy} onClick={() => decide("approve")}>승인 → 모의 주문 티켓 생성</button>

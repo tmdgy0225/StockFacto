@@ -17,11 +17,13 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from harness import failures
 from harness.agents import make_agent
 from harness.config import ROOT_DIR, get_case, load_cases, load_rules, load_strategy_rules
 from harness.eval import run_eval
 from harness.handoff import ApprovalError, decide, load_trace
 from harness.pipeline import new_run_id, run_pipeline
+from harness.review import make_reviewer
 
 app = FastAPI(title="StockFacto Harness API")
 app.add_middleware(
@@ -85,7 +87,8 @@ def create_run(req: RunRequest) -> dict:
 
     def work() -> None:
         try:
-            run_pipeline(case, agent, req.mode, sink=state["events"].append, run_id=run_id)
+            run_pipeline(case, agent, req.mode, sink=state["events"].append, run_id=run_id, use_memory=True,
+                         reviewer=make_reviewer())
         except Exception as e:
             state["events"].append({"type": "error", "message": f"{type(e).__name__}: {e}"})
         finally:
@@ -133,6 +136,11 @@ def approve(run_id: str, req: ApprovalRequest) -> dict:
         return decide(run_id, req.decision)
     except ApprovalError as e:
         raise HTTPException(409, str(e)) from e
+
+
+@app.get("/api/failures")
+def failure_memory() -> dict:
+    return failures.load()
 
 
 @app.post("/api/eval")

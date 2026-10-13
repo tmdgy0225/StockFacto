@@ -9,8 +9,10 @@ API 키 없이 하네스 전체 흐름을 재현·테스트하기 위한 가짜 
 from __future__ import annotations
 
 import copy
+import json
 
 from ..context import estimate_tokens
+from ..patch import make_patches
 from .base import AgentOutput, AgentRequest
 
 DEFAULT_PROFILE = {
@@ -102,4 +104,10 @@ class MockAgent:
             if rule_id not in self.profile["stubborn"]:
                 _apply_fix(self.state, rule_id)
         code = render(self.state, self.title)
-        return AgentOutput(code, estimate_tokens(req.system + req.user), estimate_tokens(code))
+        input_tokens = estimate_tokens(req.system + req.user)
+        if req.edit_mode == "patch" and req.previous_code is not None:
+            patches = make_patches(req.previous_code, code)
+            if patches:  # 고칠 게 없으면(고집 케이스) 같은 코드를 다시 내는 것과 동일하게 전체 코드로 응답
+                payload = json.dumps({"patches": patches}, ensure_ascii=False)
+                return AgentOutput("", input_tokens, estimate_tokens(payload), patches=patches)
+        return AgentOutput(code, input_tokens, estimate_tokens(code))

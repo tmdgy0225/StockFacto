@@ -78,6 +78,15 @@ npm run dev               # http://localhost:5173 (/api 는 8000 으로 프록�
 | `DART_API_KEY` | Open DART 조회 (스냅샷 갱신, 실시간 모드) |
 | `HARNESS_LIVE_DART=1` | 스냅샷 대신 실행 시점에 DART 를 실시간 조회 |
 | `HARNESS_SANDBOX=docker` | 백테스트를 네트워크 차단 Docker 컨테이너에서 실행 (기본은 `python -I` 서브프로세스) |
+| `HARNESS_REVIEWER=claude` | 통과한 코드에 LLM 리뷰어 경고 첨부 (추론적 센서, 판정에는 영향 없음) |
+
+## 센서 구성
+
+| 종류 | 장치 | 역할 |
+|---|---|---|
+| 연산적 센서 (차단) | Lint · Sandbox · Quality Gate · patch 검증 | 규칙 위반 시 출하 차단, rule_id 피드백 |
+| 추론적 센서 (경고) | LLM 리뷰어 (`harness/review.py`) | 의미적 문제를 승인자에게 경고만 함 |
+| 기억 | 실패 기록 (`python -m harness.failures`) | 반복된 위반을 다음 런 프롬프트에 미리 주입 |
 
 ## Shift Feedback Left
 
@@ -85,7 +94,7 @@ npm run dev               # http://localhost:5173 (/api 는 8000 으로 프록�
 |---|---|---|
 | 1. IDE | ruff (`backend/ruff.toml`, VS Code ruff 확장) | 실시간 린트 경고 |
 | 2. Pre-push | `.githooks/pre-push` | ruff 자동 수정, pytest, tsc, `.env` 유출 차단 |
-| 3. CI | `.github/workflows/ci.yml` | ruff, pytest, A/B 평가 리포트, 프론트 빌드 |
+| 3. CI | `.github/workflows/ci.yml` | ruff, pytest, A/B 평가 리포트(patch vs rewrite 포함), Docker 샌드박스, 프론트 빌드 |
 
 ## 테스트 데이터
 | 구분 | 출처 |

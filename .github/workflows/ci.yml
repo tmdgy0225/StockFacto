@@ -26,11 +26,35 @@ jobs:
       - name: Tests (lint · sandbox · pipeline · DART 판정)
         run: python -m pytest -q
       - name: A/B evaluation (Mock)
-        run: python -m harness.eval --out eval_report.json
+        run: python -m harness.eval --compare-healing --out eval_report.json
       - uses: actions/upload-artifact@v4
         with:
           name: eval-report
           path: backend/eval_report.json
+
+  # 런타임 레이어: 백테스트를 네트워크 차단·권한 제거된 Docker 컨테이너에서 실행해 검증한다.
+  sandbox-docker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      HARNESS_SANDBOX: docker
+      HARNESS_SANDBOX_IMAGE: python:3.12-slim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Pre-pull sandbox image (타임아웃에 이미지 다운로드 시간이 포함되지 않도록)
+        run: docker pull "$HARNESS_SANDBOX_IMAGE"
+      - name: Sandbox tests in Docker
+        run: python -m pytest -q tests/test_sandbox.py tests/test_pipeline.py
+      - name: No leftover containers
+        run: test -z "$(docker ps -q --filter name=stockfacto-sbx-)"
 
   frontend:
     runs-on: ubuntu-latest

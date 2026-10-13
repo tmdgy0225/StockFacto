@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,12 +30,14 @@ class SandboxResult:
     duration_ms: int = 0
 
 
-def _command() -> list[str]:
+def _command(container: str) -> list[str]:
     if os.environ.get("HARNESS_SANDBOX") == "docker":
         image = os.environ.get("HARNESS_SANDBOX_IMAGE", "python:3.12-slim")
         return [
-            "docker", "run", "--rm", "-i", "--network=none", "--memory=256m", "--cpus=1",
-            "--read-only", "-v", f"{RUNNER.parent}:/sandbox:ro", image, "python", "-I", "/sandbox/sandbox_runner.py",
+            "docker", "run", "--rm", "-i", "--name", container,
+            "--network=none", "--memory=256m", "--cpus=1", "--pids-limit=64", "--read-only",
+            "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user=65534:65534",
+            "-v", f"{RUNNER.parent}:/sandbox:ro", image, "python", "-I", "/sandbox/sandbox_runner.py",
         ]
     return [sys.executable, "-I", str(RUNNER)]
 
@@ -54,9 +57,13 @@ def run_backtest(code: str, bars: list[dict], max_weight: float, symbol: str = "
     }
     timeout = timeout_sec if timeout_sec is not None else cfg["sandbox"]["timeout_sec"]
     started = time.perf_counter()
+    container = f"stockfacto-sbx-{uuid.uuid4().hex[:12]}"
     try:
-        proc = subprocess.run(_command(), input=json.dumps(req).encode("utf-8"), capture_output=True, timeout=timeout)
+        proc = subprocess.run(_command(container), input=json.dumps(req).encode("utf-8"), capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
+        if os.environ.get("HARNESS_SANDBOX") == "docker":
+            # docker CLI 프로세스만 죽으면 컨테이너는 계속 돈다 → 명시적으로 종료
+            subprocess.run(["docker", "kill", container], capture_output=True)
         return SandboxResult(False, violations=[violation("R-007", STAGE, f"실행 시간 초과({timeout}s): 무한 루프 의심")],
                              duration_ms=_ms(started))
 

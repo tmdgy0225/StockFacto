@@ -10,13 +10,28 @@ import json
 
 from ..config import load_strategy_rules
 from ..contract import CONTRACT_DOC
+from ..patch import number_lines
 
 
 def harness_system() -> str:
     return load_strategy_rules()
 
 
-def harness_user(plan: dict, context: dict, feedback: list[dict], previous_code: str | None) -> str:
+PATCH_INSTRUCTIONS = """\
+직전 코드 전체를 다시 쓰지 말고, 고칠 줄만 패치로 출력한다. 줄 번호는 아래 '직전 코드'의 번호(1부터, 양 끝 포함)를 따른다.
+```json
+{"patches": [
+  {"op": "replace", "start": 9, "end": 9, "code": "            return Order(side=\\"buy\\", weight=ctx.max_weight, stop_loss=bar.close * 0.97)"},
+  {"op": "insert", "after": 0, "code": "import math"},
+  {"op": "delete", "start": 5, "end": 6}
+]}
+```
+- code 에는 들여쓰기를 포함한 완성된 줄을 넣는다. 범위가 겹치면 안 된다.
+- 설명 없이 ```json 블록 하나만 출력한다."""
+
+
+def harness_user(plan: dict, context: dict, feedback: list[dict], previous_code: str | None,
+                 edit_mode: str = "rewrite", memory: str | None = None) -> str:
     parts = [
         "## Plan (하네스가 확정한 제약 — 변경 불가)",
         json.dumps({k: plan[k] for k in ("symbol", "scope", "fact_status", "max_weight", "max_mdd", "stop_loss_range", "conflicts")},
@@ -26,7 +41,18 @@ def harness_user(plan: dict, context: dict, feedback: list[dict], previous_code:
         "## 사용자 요청 (Plan 의 제약 안에서만 반영)",
         plan["user_request"],
     ]
-    if feedback:
+    if memory:
+        parts.append(memory)
+    if feedback and edit_mode == "patch":
+        parts += [
+            "## 직전 시도 검증 실패 로그 (모든 rule_id 를 해결하는 패치를 출력)",
+            json.dumps(feedback, ensure_ascii=False, indent=2),
+            "## 직전 코드 (줄 번호 표시)",
+            f"```\n{number_lines(previous_code or '')}\n```",
+            "## 출력 형식: patch_file",
+            PATCH_INSTRUCTIONS,
+        ]
+    elif feedback:
         parts += [
             "## 직전 시도 검증 실패 로그 (모두 해결한 전체 코드를 다시 출력)",
             json.dumps(feedback, ensure_ascii=False, indent=2),

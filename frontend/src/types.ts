@@ -37,7 +37,14 @@ export interface Attempt {
   equity_curve: number[];
   stage_ms: Record<string, number>;
   tokens: { input: number; output: number };
+  edit_mode: "initial" | "patch" | "rewrite";
+  patches: PatchOp[] | null;
 }
+
+export type PatchOp =
+  | { op: "replace"; start: number; end: number; code: string }
+  | { op: "insert"; after: number; code: string }
+  | { op: "delete"; start: number; end: number };
 
 export interface Fact {
   type: string;
@@ -64,14 +71,15 @@ export interface Trace {
     facts: Fact[];
     tokens: { raw: number; compact: number; reduction: number };
   };
-  plan: { max_weight: number; max_mdd: number; conflicts: string[]; scope: string } | null;
+  plan: { max_weight: number; max_mdd: number; conflicts: string[]; scope: string; failure_memory: string[] } | null;
   attempts: Attempt[];
   escalation_reason: string | null;
   approval: "PENDING" | "APPROVED" | "REJECTED" | null;
+  review: { status: "ok" | "skipped" | "error"; warnings: { severity: "low" | "medium" | "high"; message: string }[]; error?: string } | null;
   duration_ms: number;
 }
 
-export type StageName = "collect" | "context" | "plan" | "execute" | "lint" | "sandbox" | "gate" | "heal" | "handoff";
+export type StageName = "collect" | "context" | "plan" | "execute" | "lint" | "sandbox" | "gate" | "heal" | "review" | "handoff";
 
 export type HarnessEvent =
   | { type: "stage"; stage: StageName; status: "running" | "done" | "pass" | "fail" | "skip"; attempt: number | null; detail: Record<string, unknown> }

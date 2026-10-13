@@ -1,0 +1,17 @@
+# 실패 기록 (Failures) — 개발 에이전트가 반복하지 말아야 할 실수
+
+이 저장소를 개발하면서 **실제로 발생한** 실수와 재발 방지책. 새 실수를 발견하면 아래에 추가한다.
+(Strategy Agent 의 런타임 실패 기록은 `backend/runs/failures.json`, `python -m harness.failures` 로 관리)
+
+| # | 날짜 | 실수 | 원인 | 재발 방지 |
+|---|---|---|---|---|
+| F1 | 10-10 | Windows 에서 `npm install` 실패 (esbuild 버전 불일치) | 전역 `~/.npmrc` 의 `os=linux` 가 리눅스 바이너리를 설치 | `npm install --os=win32` 사용. 전역 설정은 건드리지 않는다. `frontend/CLAUDE.md` 에 명시 |
+| F2 | 10-10 | 토큰 절감률이 -2% 로 집계 | 케이스별 비율의 평균 → 짧은 소스 케이스가 왜곡 | 비율 지표는 **전체 합 기준**으로 집계한다 |
+| F3 | 10-13 | 케이스 요청문의 "손절 12%" 를 사용자 요청 비중 12% 로 오인 | `plan.py` 의 퍼센트 정규식이 문맥 없이 첫 % 를 비중으로 해석 | 케이스 문구에 비중 외 % 를 쓰지 않거나, 파서를 바꿀 때 테스트 추가 |
+| F4 | 10-13 | 상장사 조회 실패 (`엔씨소프트`) | DART 등록명은 `NC` | 회사명은 `dart.find_corp` 로 확인 후 사용. `snapshot --check` 가 실패로 알려줌 |
+| F5 | 10-13 | 가상 소문 케이스가 VERIFIED 로 판정 (한미반도체) | 실제로 같은 기간 공급계약 공시가 존재 | 가상 소문 회사는 `snapshot --check` 로 공시 부재를 확인한 뒤 확정 |
+| F6 | 10-13 | 개발 에이전트에 Strategy Agent 규칙이 주입됨 | 전략 규약을 루트 `AGENTS.md` 에 둠 (코딩 도구가 자동 로드) | 런타임 프롬프트는 `backend/harness/prompts/` 에 둔다 (ADR-0002) |
+| F7 | 10-13 | pre-push 훅이 "ruff 가 파일을 수정했다" 고 오탐 | 커밋 안 된 기존 변경을 ruff 수정으로 착각 | ruff 실행 전후 diff 해시를 비교 |
+| F8 | 10-13 | 패치 적용 시 빈 줄 소실 | `str.splitlines()` 는 끝의 빈 줄을 버림 | 줄 단위 재조립은 `split("\n")` 사용, 왕복(round-trip) 테스트 유지 |
+| F10 | 10-13 | 리뷰 단계 추가 후 파이프라인 전체가 TypeError | 이벤트 detail 키 `status` 가 `stage(name, status, ...)` 의 인자명과 충돌 | 이벤트 detail 에 `status`, `attempt` 같은 예약 이름을 쓰지 않는다 (`review_status` 처럼 접두어) |
+| F9 | 10-13 | 코드 생성 스크립트의 `"\\n"` 이 실제 줄바꿈으로 들어가 SyntaxError | 셸 heredoc + 파이썬 문자열 이스케이프 중첩 | 소스 수정은 셸 문자열 치환 대신 편집 도구로, 수정 후 즉시 `ruff check` |

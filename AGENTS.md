@@ -21,6 +21,7 @@ backend/data/cases.json                    테스트 케이스 20개 (실제 DAR
 backend/tests/                             pytest
 frontend/src/                              React 콘솔
 docs/adr/                                  설계 결정 기록
+docs/failures.md                           개발 중 실제 실수와 재발 방지책
 PROGRESS.md · features.json                세션 간 상태 (Handoff Artifacts)
 ```
 
@@ -76,7 +77,8 @@ cd frontend && npx tsc --noEmit
 
 ## 8. Session Protocol (상태 관리)
 
-1. 세션 시작 시 **MUST** `PROGRESS.md` 와 `features.json` 을 먼저 읽는다.
+1. 세션 시작 시 **MUST** `PROGRESS.md`, `features.json`, `docs/failures.md`(반복 금지 실수 목록)를 먼저 읽는다.
 2. 한 번에 **하나의 기능**만 구현한다 (`features.json` 의 `todo` 항목).
 3. 완료 후 Verification Command 통과 → `features.json` 상태 갱신 → `PROGRESS.md` 에 세션 로그 추가.
 4. 설계 결정을 내렸다면 `docs/adr/` 에 ADR 을 추가한다.
+5. 작업 중 실수를 발견해 고쳤다면 `docs/failures.md` 에 원인과 재발 방지책을 추가한다.

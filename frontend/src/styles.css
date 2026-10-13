@@ -86,6 +86,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .attempt .badge { font-size: 11px; font-weight: 800; padding: 2px 6px; border-radius: 4px; }
 .attempt.passed .badge { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
 .attempt.failed .badge { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
+.mode-tag { font-size: 11px; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 4px; padding: 1px 6px; }
 .attempt-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 .code-tabs { display: flex; gap: 6px; }
 .code { margin: 0; background: #0b0d11; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.5; overflow-x: auto; max-height: 420px; }
@@ -112,3 +113,6 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .stat-row { display: flex; gap: 16px; }
 .stat-row div { display: flex; flex-direction: column; }
 .stat-row b { font-size: 24px; }
+.review { background: var(--panel-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+.review ul { margin: 6px 0 0; padding-left: 18px; }
+.review .sev-high { color: var(--bad); } .review .sev-medium { color: var(--warn); } .review .sev-low { color: var(--muted); }

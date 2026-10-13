@@ -7,6 +7,8 @@
 - unsafe_release_rate : 최종 출하된 코드 중 규칙 위반(손절 누락·비중 초과·MDD 초과·크래시 등)을 포함한 비율
 - self_healing_rate   : 첫 시도가 실패한 실험군 런 중 사람 개입 없이 PASSED 로 끝난 비율
 - token_reduction     : 뉴스·SNS·공시 원문 대비 압축 컨텍스트의 토큰 절감률(추정)
+- healing_token_reduction : Self-Healing 재시도의 출력 토큰, 전체 재작성(rewrite) 대비 patch_file 절감률
+                        (--compare-healing 일 때 같은 케이스를 rewrite 모드로 한 번 더 실행해 비교)
 - human_review_runs   : 사람이 직접 검수해야 하는 런 수 (검증 세금의 대리 지표)
     · 대조군: 자동 검증이 없으므로 모든 런
     · 실험군: 에스컬레이션된 런만 (PASSED 런은 승인 버튼만 누르면 됨)
@@ -23,13 +25,18 @@ from .config import BACKEND_DIR, load_cases
 from .pipeline import RunTrace, run_pipeline
 
 
-def run_eval(agent_name: str = "mock", case_ids: list[str] | None = None) -> dict:
+def run_eval(agent_name: str = "mock", case_ids: list[str] | None = None, compare_healing: bool = False) -> dict:
     cases = [c for c in load_cases() if not case_ids or c["id"] in case_ids]
     rows = []
     for case in cases:
         control = run_pipeline(case, make_agent(agent_name, case), "control", write=False)
         harness = run_pipeline(case, make_agent(agent_name, case), "harness", write=False)
-        rows.append(_row(case, control, harness))
+        row = _row(case, control, harness)
+        if compare_healing:
+            rewrite = run_pipeline(case, make_agent(agent_name, case), "harness", write=False, healing_mode="rewrite")
+            row["healing_output_tokens_rewrite"] = _healing_output_tokens(rewrite)
+            row["rewrite_status"] = rewrite.status
+        rows.append(row)
 
     n = len(rows)
     healing_needed = [r for r in rows if r["harness_first_failed"]]
@@ -53,6 +60,15 @@ def run_eval(agent_name: str = "mock", case_ids: list[str] | None = None) -> dic
         # 케이스별 비율의 평균이 아니라 전체 토큰 합 기준 (짧은 소스 케이스가 왜곡하지 않도록)
         "token_reduction": _ratio_reduction(sum(r["raw_tokens"] for r in rows), sum(r["compact_tokens"] for r in rows)),
     }
+    if compare_healing:
+        patch_total = sum(r["healing_output_tokens"] for r in rows)
+        rewrite_total = sum(r["healing_output_tokens_rewrite"] for r in rows)
+        summary["healing"] = {
+            "patch_output_tokens": patch_total,
+            "rewrite_output_tokens": rewrite_total,
+            "healing_token_reduction": _ratio_reduction(rewrite_total, patch_total),
+            "same_outcome": all(r["harness_status"] == r["rewrite_status"] for r in rows),
+        }
     return {"summary": summary, "rows": rows}
 
 
@@ -76,9 +92,16 @@ def _row(case: dict, control: RunTrace, harness: RunTrace) -> dict:
         "harness_prompt_tokens": harness.attempts[0].tokens.get("input", 0) if harness.attempts else 0,
         "escalation_reason": harness.escalation_reason,
         "token_reduction": harness.context["tokens"]["reduction"],
+        "healing_output_tokens": _healing_output_tokens(harness),
+        "harness_edit_modes": [a.edit_mode for a in harness.attempts],
         "raw_tokens": harness.context["tokens"]["raw"],
         "compact_tokens": harness.context["tokens"]["compact"],
     }
+
+
+def _healing_output_tokens(trace: RunTrace) -> int:
+    """재시도(2번째 시도부터)에서 에이전트가 출력한 토큰 합."""
+    return sum(a.tokens.get("output", 0) for a in trace.attempts[1:])
 
 
 def _ratio(a: int, b: int) -> float | None:
@@ -102,6 +125,10 @@ def print_report(report: dict) -> None:
     print(f"{'Self-Healing 성공률':<28}{'-':>12}{_pct(s['harness']['self_healing_rate']):>16}")
     print(f"{'평균 시도 횟수':<28}{1:>12}{s['harness']['avg_attempts']:>16}")
     print(f"{'컨텍스트 토큰 절감률(추정)':<28}{'-':>12}{_pct(s['token_reduction']):>16}")
+    if "healing" in s:
+        h = s["healing"]
+        print(f"\nSelf-Healing 출력 토큰: rewrite {h['rewrite_output_tokens']} → patch {h['patch_output_tokens']}"
+              f" ({_pct(h['healing_token_reduction'])} 절감, 결과 동일: {h['same_outcome']})")
     print("\n케이스별:")
     for r in report["rows"]:
         print(f"  {r['case_id']} [{r['fact_status']}] control={'UNSAFE' if r['control_unsafe'] else 'safe'}"
@@ -114,8 +141,9 @@ def main() -> None:
     parser.add_argument("--agent", default="mock", choices=["mock", "claude"])
     parser.add_argument("--cases", nargs="*", help="실행할 케이스 ID (기본: 전체)")
     parser.add_argument("--out", default=str(BACKEND_DIR / "runs" / "eval_report.json"))
+    parser.add_argument("--compare-healing", action="store_true", help="patch_file vs 전체 재작성 출력 토큰 비교 (실행 횟수 증가)")
     args = parser.parse_args()
-    report = run_eval(args.agent, args.cases)
+    report = run_eval(args.agent, args.cases, args.compare_healing)
     print_report(report)
     from pathlib import Path
 

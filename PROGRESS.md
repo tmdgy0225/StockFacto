@@ -6,9 +6,20 @@
 ## 현재 상태 요약
 
 - 하네스 핵심(PEV, Lint, Sandbox, Gate, Self-Healing, Handoff)과 A/B 평가(20케이스) 완료.
-- Mock 기준: 위험 코드 방출률 대조군 85% → 하네스 0%, Self-Healing 82%, 토큰 절감 86%.
-- **다음 작업**: `features.json` 의 F-16 (patch_file 방식 Self-Healing).
-- **차단 요소**: Claude 실측(F-18)은 `ANTHROPIC_API_KEY` 필요, Docker(F-19)는 미설치.
+- Mock 기준: 위험 코드 방출률 대조군 85% → 하네스 0%, Self-Healing 82%, 컨텍스트 토큰 절감 86%, patch_file 로 재시도 출력 토큰 65% 절감.
+- 테스트 73개 통과.
+- **다음 작업**: GitHub Actions 의 `sandbox-docker` 잡 결과 확인(F-19), API 키 확보 후 Claude 실측(F-18).
+- **차단 요소**: F-18 은 `ANTHROPIC_API_KEY` 필요. F-19 는 로컬 Docker 없음 → CI 에서만 검증 가능.
+
+## 2026-10-13 (2)
+
+- F-16 patch_file Self-Healing: `harness/patch.py`, R-008(패치 형식 위반, fail-closed), 화면에 패치 표시.
+  `python -m harness.eval --compare-healing` → 재시도 출력 토큰 rewrite 3861 → patch 1363 (65% 절감), 20케이스 결과 동일. ADR-0003.
+- F-17 실패 기록: Strategy Agent 런타임 기록(`harness/failures.py`, API 런에만 기록·주입) + 개발 실수 기록(`docs/failures.md`). ADR-0004.
+  Mock 은 프롬프트를 읽지 않으므로 주입 효과는 Claude 실측에서만 측정 가능.
+- F-18 Claude: 키 없음. 가짜 클라이언트 테스트로 요청 형식·응답 파싱·거절 처리만 검증.
+- F-19 Docker: 컨테이너 보안 옵션(권한 제거, 비root, pids 제한) + 타임아웃 시 `docker kill`. CI 에 `sandbox-docker` 잡 추가 (아직 미실행).
+- F-20 LLM 리뷰어: 추론적 센서, 경고만 첨부하고 판정 불변. `HARNESS_REVIEWER=claude` 로 켬. 가짜 클라이언트로 검증.
 
 ## 2026-10-13
 
