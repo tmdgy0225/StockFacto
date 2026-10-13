@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,9 +11,25 @@ HARNESS_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = HARNESS_DIR.parent
 ROOT_DIR = BACKEND_DIR.parent
 RULES_PATH = HARNESS_DIR / "rules.yaml"
-AGENTS_MD_PATH = ROOT_DIR / "AGENTS.md"
+STRATEGY_RULES_PATH = HARNESS_DIR / "prompts" / "strategy_agent.md"
 CASES_PATH = BACKEND_DIR / "data" / "cases.json"
 RUNS_DIR = BACKEND_DIR / "runs"
+ENV_PATH = BACKEND_DIR / ".env"
+
+
+def load_env(path: Path = ENV_PATH) -> None:
+    """backend/.env 의 KEY=VALUE 를 환경변수로 읽는다. 이미 설정된 환경변수가 우선한다."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env()
 
 
 @lru_cache
@@ -29,8 +46,8 @@ def rule_meta(rule_id: str) -> dict:
 
 
 @lru_cache
-def load_agents_md() -> str:
-    return AGENTS_MD_PATH.read_text(encoding="utf-8")
+def load_strategy_rules() -> str:
+    return STRATEGY_RULES_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache

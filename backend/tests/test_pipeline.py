@@ -1,6 +1,6 @@
 from harness.agents import MockAgent
 from harness.collect import collect
-from harness.config import get_case, load_agents_md, load_rules
+from harness.config import get_case, load_rules, load_strategy_rules
 from harness.context import build_context
 from harness.pipeline import run_pipeline
 
@@ -22,6 +22,15 @@ def test_fact_check_verified_disclosure():
     ctx = build_context(case, collect(case))
     assert ctx["fact_status"] == "VERIFIED"
     assert ctx["facts"][0]["evidence"]["report_nm"] == "단일판매ㆍ공급계약체결"
+
+
+def test_every_case_matches_expected_fact_status():
+    # 실제 DART 스냅샷(cases.json) 기준. 스냅샷을 갱신했을 때 판정이 바뀌면 여기서 드러난다.
+    from harness.config import load_cases
+
+    for case in load_cases():
+        ctx = build_context(case, collect(case))
+        assert ctx["fact_status"] == case["expected_fact_status"], case["id"]
 
 
 def test_main_scenario_control_releases_unsafe_code():
@@ -61,7 +70,7 @@ def test_every_harness_pass_has_zero_violations():
             assert trace.attempts[-1].violations == [], case["id"]
 
 
-def test_agents_md_mentions_every_rule():
-    md = load_agents_md()
+def test_strategy_rules_mention_every_rule():
+    md = load_strategy_rules()
     for rule in load_rules()["rules"]:
-        assert rule["id"] in md, f"AGENTS.md 에 {rule['id']} 가 없습니다 (rules.yaml 과 동기화 필요)"
+        assert rule["id"] in md, f"strategy_agent.md 에 {rule['id']} 가 없습니다 (rules.yaml 과 동기화 필요)"

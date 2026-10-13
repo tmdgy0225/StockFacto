@@ -167,7 +167,9 @@ function ContextCard({ trace }: { trace: Trace }) {
         <div><span>비중 상한</span><b>{pct(context.max_weight)}</b></div>
         <div><span>MDD 한도</span><b>{plan ? pct(plan.max_mdd) : "-"}</b></div>
         <div><span>토큰(추정)</span><b>{context.tokens.raw} → {context.tokens.compact} ({pct(context.tokens.reduction)} 절감)</b></div>
+        <div><span>Open DART (실제 공시)</span><b>{context.dart_count}건 · {context.dart_source}</b></div>
       </div>
+      <p className="muted small">SNS·뉴스·주가는 테스트용 가상 시나리오이며, DART 공시만 실제 데이터입니다.</p>
       <table className="table">
         <thead><tr><th>주장</th><th>출처</th><th>DART 판정</th><th>근거 공시</th></tr></thead>
         <tbody>

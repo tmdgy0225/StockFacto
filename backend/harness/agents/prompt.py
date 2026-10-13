@@ -1,6 +1,6 @@
 """에이전트 프롬프트 구성.
 
-- harness: AGENTS.md(규칙) + 계약 + Plan + 압축 컨텍스트 + 구조화된 실패 피드백
+- harness: Strategy Agent 규약(prompts/strategy_agent.md) + 계약 + Plan + 압축 컨텍스트 + 구조화된 실패 피드백
 - control: 계약 + 사용자 요청 + 원문 소스(RAG 유사). 규칙·검증 없음
 대조군에도 계약은 준다. 계약이 없으면 같은 엔진에서 실행조차 못 해 비교가 불공정해지기 때문이다.
 """
@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import json
 
-from ..config import load_agents_md
+from ..config import load_strategy_rules
 from ..contract import CONTRACT_DOC
 
 
 def harness_system() -> str:
-    return load_agents_md()
+    return load_strategy_rules()
 
 
 def harness_user(plan: dict, context: dict, feedback: list[dict], previous_code: str | None) -> str:

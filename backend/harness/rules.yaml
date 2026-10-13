@@ -1,6 +1,6 @@
 # 하네스 규칙의 단일 진실 공급원(Single Source of Truth).
 # Linter · Sandbox · Quality Gate · 에이전트 프롬프트가 모두 이 파일을 읽는다.
-# 규칙을 추가/변경하면 루트의 AGENTS.md 에도 같은 ID로 반영해야 한다 (tests/test_agents_md_sync.py 가 검사).
+# 규칙을 추가/변경하면 prompts/strategy_agent.md 에도 같은 ID로 반영해야 한다 (tests/test_pipeline.py 가 검사).
 version: 1
 
 risk:

@@ -1,0 +1,26 @@
+{
+  "project": "StockFacto",
+  "updated": "2026-10-13",
+  "features": [
+    {"id": "F-01", "area": "collect", "title": "가상 SNS·뉴스 + 실제 DART 스냅샷 수집", "status": "done"},
+    {"id": "F-02", "area": "context", "title": "DART Cross-Fact Check → VERIFIED/UNVERIFIED, 비중 상한 결정", "status": "done"},
+    {"id": "F-03", "area": "plan", "title": "PLAN: 리스크 한도 확정 및 사용자 요청 충돌 기록", "status": "done"},
+    {"id": "F-04", "area": "agent", "title": "Mock Strategy Agent (결정론적)", "status": "done"},
+    {"id": "F-05", "area": "agent", "title": "Claude Strategy Agent", "status": "done", "note": "API 키 미연결로 실측 전"},
+    {"id": "F-06", "area": "verify", "title": "AST Static Linter (R-000~R-006)", "status": "done"},
+    {"id": "F-07", "area": "verify", "title": "Sandbox 백테스트 + 런타임 fail-closed 집행", "status": "done"},
+    {"id": "F-08", "area": "verify", "title": "Quality Gate (MDD, 체결 비중)", "status": "done"},
+    {"id": "F-09", "area": "heal", "title": "Self-Healing 루프 (최대 5회, 진전 없음 감지)", "status": "done"},
+    {"id": "F-10", "area": "handoff", "title": "Handoff Artifacts + @RequiresApproval 모의 주문 티켓", "status": "done"},
+    {"id": "F-11", "area": "eval", "title": "A/B 평가 러너 + 20개 케이스", "status": "done"},
+    {"id": "F-12", "area": "frontend", "title": "React 콘솔 (실시간 파이프라인, 승인, A/B 결과)", "status": "done"},
+    {"id": "F-13", "area": "harness-dev", "title": "강의 지시어 형식 Strategy Agent 규약 + Verification Command CLI", "status": "done"},
+    {"id": "F-14", "area": "harness-dev", "title": "개발 하네스: AGENTS.md / 계층형 CLAUDE.md / PROGRESS.md / init 스크립트", "status": "done"},
+    {"id": "F-15", "area": "harness-dev", "title": "Shift-left: ruff + pre-push 훅 + GitHub Actions CI", "status": "done"},
+    {"id": "F-16", "area": "heal", "title": "patch_file 방식 Self-Healing (부분 수정, 토큰 절감)", "status": "todo"},
+    {"id": "F-17", "area": "knowledge", "title": "ADR 보강 + 실패 기록(Failures) 저장소와 에이전트 주입", "status": "todo"},
+    {"id": "F-18", "area": "eval", "title": "Claude API 실측 A/B 평가", "status": "todo", "note": "ANTHROPIC_API_KEY 필요"},
+    {"id": "F-19", "area": "runtime", "title": "Docker 샌드박스 실행 검증", "status": "todo", "note": "Docker 설치 필요"},
+    {"id": "F-20", "area": "verify", "title": "추론적 센서 (LLM 리뷰어)", "status": "todo", "note": "선택"}
+  ]
+}

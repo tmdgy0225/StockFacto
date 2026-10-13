@@ -10,9 +10,9 @@ from __future__ import annotations
 import difflib
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Callable
+from datetime import UTC, datetime
 
 from .agents import AgentError, AgentRequest, StrategyAgent
 from .agents import prompt as prompts
@@ -81,11 +81,12 @@ def run_pipeline(case: dict, agent: StrategyAgent, mode: str = "harness", sink: 
     # [1] 수집
     stage("collect", "running")
     collected = collect(case)
-    stage("collect", "done", sns=len(collected["sns"]), news=len(collected["news"]), dart=len(collected["dart"]))
+    stage("collect", "done", sns=len(collected["sns"]), news=len(collected["news"]), dart=len(collected["dart"]),
+          dart_source=collected["dart_source"])
 
     # [2] Context Filter Engine (DART 크로스체크) — 대조군에서도 계측용으로 계산만 한다
     ctx = build_context(case, collected)
-    trace.context = {k: ctx[k] for k in ("fact_status", "max_weight", "facts", "compact", "tokens")}
+    trace.context = {k: ctx[k] for k in ("fact_status", "max_weight", "dart_source", "dart_count", "facts", "compact", "tokens")}
     bars = generate_bars(case["prices"])
 
     try:
@@ -210,4 +211,4 @@ def _unique(violations: list[Violation]) -> list[Violation]:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")

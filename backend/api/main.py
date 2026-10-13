@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from harness.agents import make_agent
-from harness.config import ROOT_DIR, get_case, load_agents_md, load_cases, load_rules
+from harness.config import ROOT_DIR, get_case, load_cases, load_rules, load_strategy_rules
 from harness.eval import run_eval
 from harness.handoff import ApprovalError, decide, load_trace
 from harness.pipeline import new_run_id, run_pipeline
@@ -65,7 +65,7 @@ def cases() -> list[dict]:
 
 @app.get("/api/rules")
 def rules() -> dict:
-    return {"rules": load_rules(), "agents_md": load_agents_md()}
+    return {"rules": load_rules(), "strategy_rules": load_strategy_rules()}
 
 
 @app.post("/api/runs")
@@ -73,11 +73,11 @@ def create_run(req: RunRequest) -> dict:
     try:
         case = get_case(req.case_id)
     except KeyError:
-        raise HTTPException(404, "case not found")
+        raise HTTPException(404, "case not found") from None
     try:
         agent = make_agent(req.agent, case)
     except Exception as e:  # anthropic 미설치/인증 누락 등
-        raise HTTPException(400, f"agent init failed: {e}")
+        raise HTTPException(400, f"agent init failed: {e}") from e
 
     run_id = new_run_id()
     state = {"events": [], "done": False}
@@ -132,7 +132,7 @@ def approve(run_id: str, req: ApprovalRequest) -> dict:
     try:
         return decide(run_id, req.decision)
     except ApprovalError as e:
-        raise HTTPException(409, str(e))
+        raise HTTPException(409, str(e)) from e
 
 
 @app.post("/api/eval")

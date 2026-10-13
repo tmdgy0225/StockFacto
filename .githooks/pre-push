@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Shift-left 2단계: push 전에 CI 와 같은 검사를 로컬에서 먼저 실행해 CI 실패를 사전 차단한다.
+# 활성화: git config core.hooksPath .githooks  (init.ps1 / init.sh 가 자동 설정)
+# 긴급 시 우회: git push --no-verify (권장하지 않음)
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT/backend"
+
+if [ -x .venv/Scripts/python.exe ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+if [ ! -x "$PY" ]; then
+  echo "[pre-push] backend/.venv 가 없습니다. ./init.ps1 또는 ./init.sh 를 먼저 실행하세요." >&2
+  exit 1
+fi
+
+# 비밀 정보 유출 차단: 추적 대상에 .env 가 들어가 있으면 중단
+if git -C "$ROOT" ls-files --error-unmatch backend/.env >/dev/null 2>&1; then
+  echo "[pre-push] backend/.env 가 git 에 추적되고 있습니다. push 를 중단합니다." >&2
+  exit 1
+fi
+
+echo "[pre-push] ruff (자동 수정 후 재검사)"
+before="$(git -C "$ROOT" diff -- backend | git hash-object --stdin)"
+"$PY" -m ruff check . --fix --quiet || true
+after="$(git -C "$ROOT" diff -- backend | git hash-object --stdin)"
+if [ "$before" != "$after" ]; then
+  echo "[pre-push] ruff 가 파일을 자동 수정했습니다. 변경 사항을 커밋한 뒤 다시 push 하세요." >&2
+  exit 1
+fi
+"$PY" -m ruff check .
+
+echo "[pre-push] pytest"
+"$PY" -m pytest -q
+
+if [ -d "$ROOT/frontend/node_modules" ]; then
+  echo "[pre-push] frontend type check"
+  (cd "$ROOT/frontend" && npx tsc --noEmit)
+fi
+
+echo "[pre-push] OK"

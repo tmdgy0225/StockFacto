@@ -67,6 +67,8 @@ def build_context(case: dict, collected: dict) -> dict:
     return {
         "fact_status": status,
         "max_weight": max_weight,
+        "dart_source": collected.get("dart_source", "fixture"),
+        "dart_count": len(collected["dart"]),
         "facts": facts,
         "compact": compact,
         "compact_text": compact_text,

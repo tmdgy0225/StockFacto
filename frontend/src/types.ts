@@ -59,6 +59,8 @@ export interface Trace {
   context: {
     fact_status: "VERIFIED" | "UNVERIFIED";
     max_weight: number;
+    dart_source: string;
+    dart_count: number;
     facts: Fact[];
     tokens: { raw: number; compact: number; reduction: number };
   };

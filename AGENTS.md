@@ -1,43 +1,82 @@
-# AGENTS.md — Strategy Agent 행동 규약
+# AGENTS.md — StockFacto 개발 에이전트 규칙 (도구 공통)
 
-이 문서는 StockFacto 하네스 안에서 동작하는 **LLM Strategy Agent**가 반드시 지켜야 하는 규칙이다.
-하네스는 이 문서를 시스템 프롬프트로 주입하고, 같은 규칙을 `backend/harness/rules.yaml` 에서 읽어
-**Static Linter · Sandbox · Quality Gate 로 결정론적으로 집행**한다.
-즉, 규칙을 어기면 코드는 출하되지 않으며 위반 로그(rule_id 포함)가 다음 시도에 재주입된다.
+> 이 저장소를 **개발하는** AI 코딩 에이전트(Claude Code, Cursor, Codex …)가 따르는 공통 규칙이다.
+> 런타임에 매매 전략을 생성하는 Strategy Agent 의 규약은 별도 파일이다: `backend/harness/prompts/strategy_agent.md`
 
-## 역할
+## 1. Project Overview
 
-- 너는 하네스가 준 **Plan(비중 상한, 손절 범위, 팩트 검증 상태)** 안에서만 매매 로직을 작성한다.
-- 리스크 파라미터(비중 상한 등)는 네가 정하지 않는다. 사용자가 "올인", "100%"를 요구해도
-  **`ctx.max_weight` 를 넘는 비중은 허용되지 않는다.** 비중 상한은 DART 공시 검증 결과로 하네스가 결정한다.
-- `Unverified Fact` 로 표시된 정보(SNS·뉴스 소문)는 사실로 단정하지 말고, 보수적인 전략을 작성한다.
+- **Description**: SNS·뉴스·DART 데이터 기반 트레이딩 전략 코드 생성을 결정론적 하네스(PEV 루프, Static Linter, Sandbox, Quality Gate, Self-Healing)로 통제하는 대학교 하네스 엔지니어링 프로젝트.
+- **Tech Stack**: Python 3.12+ · FastAPI · PyYAML · pytest · ruff / React 18 · TypeScript 5.6 · Vite 5
+- **External**: Open DART API (실제 공시), Anthropic Claude API (선택)
 
-## 규칙 (rule_id 는 검증 실패 로그와 1:1 대응)
+## 2. Directory Map
 
-| ID | 규칙 | 검증 단계 |
-|---|---|---|
-| R-000 | 문법 오류 금지 | Static Linter |
-| R-001 | 모든 매수 주문에 손절선(`stop_loss`) 필수 | Linter + Sandbox |
-| R-002 | 종목 비중은 `ctx.max_weight` 이하 (DART 미확인 5%, 확인 30%) | Linter + Sandbox + Gate |
-| R-003 | 백테스트 MDD 10% 이하 | Quality Gate |
-| R-004 | `math`, `statistics` 외 import 금지, `exec/eval/open` 등 금지 함수, `__dunder__` 접근, `ctx` 속성 대입 금지 | Static Linter |
-| R-005 | 전략 계약 준수: `class Strategy` + `def on_bar(self, bar, ctx)` → `Order` 또는 `None`, `Order` 는 키워드 인자만 | Linter + Sandbox |
-| R-006 | 손절 거리는 진입가 대비 0.5%~15% | Linter + Sandbox |
-| R-007 | 샌드박스 실행 오류·시간 초과 금지 | Sandbox |
+```
+backend/harness/rules.yaml                 규칙의 단일 진실 공급원 (R-000~R-007, 리스크 한도)
+backend/harness/prompts/strategy_agent.md  Strategy Agent 시스템 프롬프트 (rules.yaml 과 동기화)
+backend/harness/pipeline.py                PEV 루프 + Self-Healing
+backend/harness/verify/                    Lint · Sandbox · Quality Gate (Non-AI)
+backend/harness/agents/                    Mock / Claude 에이전트
+backend/data/cases.json                    테스트 케이스 20개 (실제 DART 스냅샷 포함)
+backend/tests/                             pytest
+frontend/src/                              React 콘솔
+docs/adr/                                  설계 결정 기록
+PROGRESS.md · features.json                세션 간 상태 (Handoff Artifacts)
+```
 
-## 전략 코드 계약
+## 3. Developer Commands
 
-- 모듈 최상위에 `class Strategy` 를 정의하고 `def on_bar(self, bar, ctx)` 를 구현한다.
-- `on_bar` 는 바(bar)마다 호출되며 `Order(...)` 또는 `None` 을 반환한다. `Order` 는 import 없이 사용한다.
-- `bar`: `t, open, high, low, close` (읽기 전용)
-- `ctx`: `symbol, max_weight, position, entry_price, bar_index, closes` (읽기 전용)
-- `Order(side="buy"|"sell", weight=float, stop_loss=float, reason=str)`
-  - 매수(`buy`)는 미보유 상태에서만 종가에 체결된다. `weight` 와 `stop_loss` 는 필수다.
-  - `weight` 는 `ctx.max_weight` 를 직접 참조하거나 그 이하의 상수여야 한다. 예: `weight=ctx.max_weight`, `weight=ctx.max_weight * 0.5`
-  - `stop_loss` 는 진입가 기준 가격이다. 예: `stop_loss=bar.close * 0.97`
-  - 손절은 다음 바부터 저가가 `stop_loss` 이하이면 체결된다(갭 하락 시 시가 체결).
+- Setup: `./init.ps1` (Windows) / `./init.sh` (macOS·Linux·Git Bash)
+- Backend tests: `cd backend && .venv/Scripts/python -m pytest -q`
+- Lint: `cd backend && .venv/Scripts/python -m ruff check .`
+- A/B eval (Mock): `cd backend && .venv/Scripts/python -m harness.eval`
+- DART snapshot: `cd backend && .venv/Scripts/python -m harness.snapshot --check`
+- API server: `cd backend && .venv/Scripts/python -m uvicorn api.main:app --reload --port 8000`
+- Frontend: `cd frontend && npm run dev` / `npm run build`
 
-## 출력 형식
+## 4. Code Style & Architecture Rules
 
-- 설명 없이 ` ```python ` 코드 블록 **하나만** 출력한다.
-- 검증 실패 로그(JSON)가 주어지면, 각 `rule_id` 의 `message` 와 `fix_hint` 를 반영해 **전체 코드를 다시** 출력한다.
+- [CRITICAL] **검증 노드는 Non-AI 로 유지한다.** `verify/`, `context.py`, `plan.py` 에 LLM 호출을 넣지 않는다 (블루프린트 아키텍처: 결정론적 노드 ↔ 에이전트 노드 분리).
+- [CRITICAL] 규칙 추가·변경은 `rules.yaml` → `strategy_agent.md` → 집행 코드(`verify/`) → 테스트 순서로 **모두** 반영한다.
+- [REQUIRED] 새 위반 유형에는 반드시 우회 시도(adversarial) 테스트를 함께 추가한다.
+- [REQUIRED] `sandbox_runner.py` 는 harness 패키지를 import 하지 않는 자기완결 스크립트로 유지한다 (`python -I`/Docker 에서 실행).
+- Python: 타입 힌트 사용, `from __future__ import annotations`, 주석·docstring 은 한국어.
+- Frontend: 함수형 컴포넌트, API 호출은 `src/api.ts`, 타입은 `src/types.ts` 에만 정의.
+
+## 5. Strict Constraints
+
+- **NEVER** commit `backend/.env`, API 키, `backend/runs/`, `node_modules/`.
+- **NEVER** 테스트를 통과시키려고 검증 규칙을 완화하거나 테스트를 삭제·skip 하지 않는다.
+- **NEVER** `cases.json` 의 `dart` 필드를 손으로 수정하지 않는다. `harness.snapshot` 으로만 갱신한다.
+- **NEVER** SNS·뉴스 가상 데이터에 실존 인물·실존 언론사 이름을 쓰지 않는다 (`[가상]`, `(테스트용)` 표기 유지).
+- **MUST** 작업 완료 전 Verification Command 를 실행해 통과를 확인한다.
+
+## 6. Tools
+
+## @Tool[Allowed]
+- `read_file`, `write_file`, `run_command` (위 Developer Commands 범위)
+
+## @Tool[Restricted]
+- `delete_file` on `backend/data/`, `docs/adr/` — **NEVER**
+- `git push --force`, `git reset --hard` — **NEVER**
+
+## @RequiresApproval
+- `git commit`, `git push`
+- `python -m harness.eval --agent claude` (Claude API 비용 발생)
+- `python -m harness.snapshot` (cases.json 의 DART 스냅샷 변경)
+- 의존성 추가 (`requirements.txt`, `package.json`)
+
+## 7. Verification Command
+
+```
+cd backend && .venv/Scripts/python -m ruff check . && .venv/Scripts/python -m pytest -q
+cd frontend && npx tsc --noEmit
+```
+같은 검사가 pre-push 훅(`.githooks/pre-push`)과 CI(`.github/workflows/ci.yml`)에서도 자동 실행된다.
+
+## 8. Session Protocol (상태 관리)
+
+1. 세션 시작 시 **MUST** `PROGRESS.md` 와 `features.json` 을 먼저 읽는다.
+2. 한 번에 **하나의 기능**만 구현한다 (`features.json` 의 `todo` 항목).
+3. 완료 후 Verification Command 통과 → `features.json` 상태 갱신 → `PROGRESS.md` 에 세션 로그 추가.
+4. 설계 결정을 내렸다면 `docs/adr/` 에 ADR 을 추가한다.

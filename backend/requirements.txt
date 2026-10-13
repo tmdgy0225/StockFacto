@@ -3,5 +3,6 @@ uvicorn>=0.30
 pydantic>=2.9
 pyyaml>=6.0.2
 pytest>=8.0
+ruff>=0.6
 # 실제 LLM(Claude) 에이전트를 쓸 때만 필요
 anthropic>=0.70

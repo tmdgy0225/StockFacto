@@ -1,0 +1,11 @@
+# Shift-left 1단계: IDE(ruff 확장)에서 실시간 경고, pre-push 훅과 CI 에서 동일 규칙으로 재검사.
+line-length = 140
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# sandbox_runner 는 python -I 로 단독 실행되는 스크립트라 의도적으로 구식 문법·import 순서를 허용
+"harness/verify/sandbox_runner.py" = ["UP"]

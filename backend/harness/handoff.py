@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from .config import RUNS_DIR
@@ -25,7 +25,7 @@ def run_dir(run_id: str):
     return RUNS_DIR / run_id
 
 
-def write_artifacts(trace: "RunTrace") -> None:
+def write_artifacts(trace: RunTrace) -> None:
     d = run_dir(trace.run_id)
     d.mkdir(parents=True, exist_ok=True)
     (d / "trace.json").write_text(json.dumps(trace.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -55,7 +55,7 @@ def decide(run_id: str, decision: str, approver: str = "user") -> dict:
             "max_weight": trace["plan"]["max_weight"],
             "strategy_file": "strategy.py",
             "approved_by": approver,
-            "approved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "approved_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }
         (d / "order_ticket.json").write_text(json.dumps(ticket, ensure_ascii=False, indent=2), encoding="utf-8")
         trace["order_ticket"] = ticket

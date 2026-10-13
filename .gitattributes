@@ -1,0 +1,4 @@
+# 줄바꿈 통일 (Windows / macOS / Linux / CI 공통)
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
