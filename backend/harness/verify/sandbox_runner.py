@@ -112,7 +112,8 @@ def run(req):
             error = {"type": type(e).__name__, "message": str(e), "line": _strategy_line(e.__traceback__), "bar": None}
             return _result(False, error, violations, m, curve, captured)
 
-        ctx = Context(req.get("symbol", ""), cap)
+        # ctx.max_weight 는 전략에 보여주는 값. 위반 판정은 항상 cap 으로 한다 (대조군은 ctx 1.0 / cap 은 실제 상한).
+        ctx = Context(req.get("symbol", ""), float(req.get("ctx_max_weight", cap)))
         cash, shares, stop = 1.0, 0.0, None
         peak = 1.0
         closes = []

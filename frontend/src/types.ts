@@ -1,5 +1,5 @@
 export type Mode = "harness" | "control";
-export type AgentName = "mock" | "claude";
+export type AgentName = "mock" | "claude" | "gemini";
 
 export interface CaseSummary {
   id: string;

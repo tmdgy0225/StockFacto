@@ -13,5 +13,6 @@
 | F6 | 10-13 | 개발 에이전트에 Strategy Agent 규칙이 주입됨 | 전략 규약을 루트 `AGENTS.md` 에 둠 (코딩 도구가 자동 로드) | 런타임 프롬프트는 `backend/harness/prompts/` 에 둔다 (ADR-0002) |
 | F7 | 10-13 | pre-push 훅이 "ruff 가 파일을 수정했다" 고 오탐 | 커밋 안 된 기존 변경을 ruff 수정으로 착각 | ruff 실행 전후 diff 해시를 비교 |
 | F8 | 10-13 | 패치 적용 시 빈 줄 소실 | `str.splitlines()` 는 끝의 빈 줄을 버림 | 줄 단위 재조립은 `split("\n")` 사용, 왕복(round-trip) 테스트 유지 |
+| F11 | 10-14 | 대조군이 실제보다 안전하게 측정됨 (실제 Gemini 첫 실측에서 발견) | 대조군에도 하네스 비중 상한(5%)이 `ctx.max_weight` 로 주입됨. "잔고 100%" 의도로 쓴 `weight=ctx.max_weight` 가 5% 로 체결 | 대조군은 `ctx.max_weight=1.0`(상한 미주입), 위반 판정만 실제 상한으로 계측. 회귀 테스트 `test_control_group_gets_no_injected_weight_cap`. Mock 은 상수 `1.0` 을 써서 이 버그를 드러내지 못했다 → 실제 LLM 실측이 필요한 이유 |
 | F10 | 10-13 | 리뷰 단계 추가 후 파이프라인 전체가 TypeError | 이벤트 detail 키 `status` 가 `stage(name, status, ...)` 의 인자명과 충돌 | 이벤트 detail 에 `status`, `attempt` 같은 예약 이름을 쓰지 않는다 (`review_status` 처럼 접두어) |
 | F9 | 10-13 | 코드 생성 스크립트의 `"\\n"` 이 실제 줄바꿈으로 들어가 SyntaxError | 셸 heredoc + 파이썬 문자열 이스케이프 중첩 | 소스 수정은 셸 문자열 치환 대신 편집 도구로, 수정 후 즉시 `ruff check` |

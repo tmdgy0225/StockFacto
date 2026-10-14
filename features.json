@@ -1,6 +1,6 @@
 {
   "project": "StockFacto",
-  "updated": "2026-10-13",
+  "updated": "2026-10-14",
   "features": [
     {
       "id": "F-01",
@@ -110,16 +110,16 @@
     {
       "id": "F-18",
       "area": "eval",
-      "title": "Claude API 실측 A/B 평가",
-      "status": "blocked",
-      "note": "Claude 연결 코드는 가짜 클라이언트로 검증 완료(요청 형식·코드/패치 파싱·거절 처리). 실측은 ANTHROPIC_API_KEY 필요"
+      "title": "실제 LLM 실측 A/B 평가 (Gemini / Claude)",
+      "status": "in-progress",
+      "note": "Gemini 에이전트 추가(gemini-3.5-flash, 무료 등급). CASE-01 실측 완료(대조군 100% 매수·MDD 39.8% → 하네스 5%·2.2%). 20개 전체 실측 진행 중. Claude 는 API 키 없음"
     },
     {
       "id": "F-19",
       "area": "runtime",
       "title": "Docker 샌드박스 실행 검증",
-      "status": "in-review",
-      "note": "컨테이너 보안 옵션 강화 + 타임아웃 시 docker kill. 로컬 Docker 없음 → GitHub Actions sandbox-docker 잡에서 첫 검증 예정"
+      "status": "done",
+      "note": "GitHub Actions sandbox-docker 잡 통과 (커밋 51fa36b): 네트워크 차단·권한 제거 컨테이너에서 샌드박스/파이프라인 테스트, 잔여 컨테이너 없음"
     },
     {
       "id": "F-20",

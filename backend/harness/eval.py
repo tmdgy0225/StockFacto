@@ -28,7 +28,8 @@ from .pipeline import RunTrace, run_pipeline
 def run_eval(agent_name: str = "mock", case_ids: list[str] | None = None, compare_healing: bool = False) -> dict:
     cases = [c for c in load_cases() if not case_ids or c["id"] in case_ids]
     rows = []
-    for case in cases:
+    for i, case in enumerate(cases, 1):
+        print(f"[{i}/{len(cases)}] {case['id']} {case['symbol']} 실행 중...", flush=True)
         control = run_pipeline(case, make_agent(agent_name, case), "control", write=False)
         harness = run_pipeline(case, make_agent(agent_name, case), "harness", write=False)
         row = _row(case, control, harness)
@@ -38,11 +39,15 @@ def run_eval(agent_name: str = "mock", case_ids: list[str] | None = None, compar
             row["rewrite_status"] = rewrite.status
         rows.append(row)
 
+    # 에이전트 오류(API 사용량 초과·네트워크 등)는 코드 안전성과 무관하므로 지표에서 제외하고 따로 보고한다.
+    errored = [r["case_id"] for r in rows if r["error"]]
+    all_rows, rows = rows, [r for r in rows if not r["error"]]
     n = len(rows)
     healing_needed = [r for r in rows if r["harness_first_failed"]]
     summary = {
         "agent": agent_name,
         "cases": n,
+        "errored_cases": errored,
         "control": {
             "unsafe_release_rate": _ratio(sum(r["control_unsafe"] for r in rows), n),
             "human_review_runs": n,
@@ -69,7 +74,7 @@ def run_eval(agent_name: str = "mock", case_ids: list[str] | None = None, compar
             "healing_token_reduction": _ratio_reduction(rewrite_total, patch_total),
             "same_outcome": all(r["harness_status"] == r["rewrite_status"] for r in rows),
         }
-    return {"summary": summary, "rows": rows}
+    return {"summary": summary, "rows": all_rows}
 
 
 def _row(case: dict, control: RunTrace, harness: RunTrace) -> dict:
@@ -79,7 +84,9 @@ def _row(case: dict, control: RunTrace, harness: RunTrace) -> dict:
         "case_id": case["id"],
         "title": case["title"],
         "fact_status": harness.context.get("fact_status"),
-        "control_unsafe": bool(control.unsafe) or control.status == "ERROR",
+        "control_unsafe": bool(control.unsafe),
+        "error": control.status == "ERROR" or harness.status == "ERROR",
+        "error_reason": next((t.escalation_reason for t in (control, harness) if t.status == "ERROR"), None),
         "control_rules": sorted({v["rule_id"] for v in c_attempt.violations}) if c_attempt else [],
         "control_mdd": (c_attempt.metrics or {}).get("mdd") if c_attempt else None,
         "control_prompt_tokens": c_attempt.tokens.get("input", 0) if c_attempt else 0,
@@ -119,6 +126,9 @@ def _pct(x: float | None) -> str:
 def print_report(report: dict) -> None:
     s = report["summary"]
     print(f"\n=== A/B 평가 (agent={s['agent']}, cases={s['cases']}) ===")
+    if s["errored_cases"]:
+        print(f"※ 에이전트 오류로 제외된 케이스 {len(s['errored_cases'])}개: {', '.join(s['errored_cases'])}"
+              " (사용량 초과라면 나중에 --cases 로 다시 실행)")
     print(f"{'지표':<28}{'대조군':>12}{'실험군(하네스)':>16}")
     print(f"{'위험 코드 방출률':<28}{_pct(s['control']['unsafe_release_rate']):>12}{_pct(s['harness']['unsafe_release_rate']):>16}")
     print(f"{'사람 검수 필요 런':<28}{s['control']['human_review_runs']:>12}{s['harness']['human_review_runs']:>16}")
@@ -138,7 +148,7 @@ def print_report(report: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="StockFacto harness A/B evaluation")
-    parser.add_argument("--agent", default="mock", choices=["mock", "claude"])
+    parser.add_argument("--agent", default="mock", choices=["mock", "claude", "gemini"])
     parser.add_argument("--cases", nargs="*", help="실행할 케이스 ID (기본: 전체)")
     parser.add_argument("--out", default=str(BACKEND_DIR / "runs" / "eval_report.json"))
     parser.add_argument("--compare-healing", action="store_true", help="patch_file vs 전체 재작성 출력 토큰 비교 (실행 횟수 증가)")

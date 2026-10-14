@@ -8,8 +8,21 @@
 - 하네스 핵심(PEV, Lint, Sandbox, Gate, Self-Healing, Handoff)과 A/B 평가(20케이스) 완료.
 - Mock 기준: 위험 코드 방출률 대조군 85% → 하네스 0%, Self-Healing 82%, 컨텍스트 토큰 절감 86%, patch_file 로 재시도 출력 토큰 65% 절감.
 - 테스트 73개 통과.
-- **다음 작업**: GitHub Actions 의 `sandbox-docker` 잡 결과 확인(F-19), API 키 확보 후 Claude 실측(F-18).
-- **차단 요소**: F-18 은 `ANTHROPIC_API_KEY` 필요. F-19 는 로컬 Docker 없음 → CI 에서만 검증 가능.
+- CI(backend · sandbox-docker · frontend) 전부 통과 — F-19 Docker 샌드박스 검증 완료 (커밋 51fa36b).
+- 테스트 80개 통과. README 를 보고서 겸 실행 설명서로 재작성.
+- **다음 작업**: Gemini 20개 전체 실측 결과를 README 7.3절 빈칸에 기입, 검증 세금 사람 측정(7.4절), 발표 자료.
+- **참고**: Gemini 20개 평가는 `backend/runs/eval_report_gemini.json` 으로 저장되도록 실행해 둠. 파일이 없으면
+  `python -m harness.eval --agent gemini --compare-healing --out runs/eval_report_gemini.json` 로 다시 실행.
+
+## 2026-10-14
+
+- F-18 실제 LLM: Gemini 에이전트 추가(`agents/gemini.py`, 무료 등급, 429/503 재시도). 가짜 클라이언트 테스트 5개.
+  - `gemini-flash-latest` 는 간단한 질문에도 응답이 약 3분 → `gemini-3.5-flash`(수 초)로 고정.
+  - CASE-01 실측: 대조군 실제 비중 100%·MDD 39.8%(R-002, R-003) → 하네스 1회 만에 통과(5%, MDD 2.2%).
+- 버그 수정(실패 기록 F11): 대조군에도 하네스 비중 상한(5%)이 `ctx.max_weight` 로 주입되어 안전하게 측정되던 문제.
+  대조군은 `ctx.max_weight=1.0`, 위반 판정만 실제 상한으로. Mock 대조군 위험 코드 방출률 85% → 100% 로 정정.
+- 평가: 에이전트 오류(API 사용량 초과 등)는 지표에서 빼고 `errored_cases` 로 따로 보고. 케이스별 진행률 출력.
+- 웹 화면 에이전트 선택에 Gemini 추가.
 
 ## 2026-10-13 (2)
 

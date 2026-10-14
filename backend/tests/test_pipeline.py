@@ -33,6 +33,31 @@ def test_every_case_matches_expected_fact_status():
         assert ctx["fact_status"] == case["expected_fact_status"], case["id"]
 
 
+def test_control_group_gets_no_injected_weight_cap():
+    # 회귀 테스트: 실제 Gemini 대조군 코드. 주석은 '잔고 100%' 인데 weight=ctx.max_weight 를 썼다.
+    # 대조군에 하네스 상한(5%)이 새어 들어가면 안전해 보이는 착시가 생긴다 → 대조군 ctx.max_weight 는 1.0.
+    from harness.agents import AgentOutput
+
+    code = '''class Strategy:
+    def on_bar(self, bar, ctx):
+        # 미보유 상태에서 잔고 100%(ctx.max_weight) 비중으로 매수
+        if ctx.position == 0:
+            return Order(side="buy", weight=ctx.max_weight, stop_loss=bar.close * 0.95)
+        return None
+'''
+
+    class Fixed(MockAgent):
+        def generate(self, req):
+            return AgentOutput(code, 0, 0)
+
+    case = get_case("CASE-01")
+    control = run_pipeline(case, Fixed(case), "control", write=False)
+    assert control.unsafe and "R-002" in {v["rule_id"] for v in control.attempts[0].violations}
+    assert control.attempts[0].metrics["max_weight_used"] == 1.0
+    harness = run_pipeline(case, Fixed(case), "harness", write=False)
+    assert harness.status == "PASSED" and harness.attempts[0].metrics["max_weight_used"] == 0.05
+
+
 def test_main_scenario_control_releases_unsafe_code():
     trace = run("CASE-01", "control")
     assert trace.status == "RELEASED" and trace.unsafe

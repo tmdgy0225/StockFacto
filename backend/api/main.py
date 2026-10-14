@@ -40,7 +40,7 @@ _RUNS: dict[str, dict] = {}
 class RunRequest(BaseModel):
     case_id: str
     mode: Literal["harness", "control"] = "harness"
-    agent: Literal["mock", "claude"] = "mock"
+    agent: Literal["mock", "claude", "gemini"] = "mock"
 
 
 class ApprovalRequest(BaseModel):
@@ -48,7 +48,7 @@ class ApprovalRequest(BaseModel):
 
 
 class EvalRequest(BaseModel):
-    agent: Literal["mock", "claude"] = "mock"
+    agent: Literal["mock", "claude", "gemini"] = "mock"
     case_ids: list[str] | None = None
 
 

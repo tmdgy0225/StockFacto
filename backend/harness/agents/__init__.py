@@ -11,6 +11,10 @@ def make_agent(name: str, case: dict) -> StrategyAgent:
         from .claude import ClaudeAgent  # anthropic 패키지는 선택 의존성
 
         return ClaudeAgent()
+    if name == "gemini":
+        from .gemini import GeminiAgent  # google-genai 패키지는 선택 의존성
+
+        return GeminiAgent()
     raise ValueError(f"unknown agent: {name}")
 
 

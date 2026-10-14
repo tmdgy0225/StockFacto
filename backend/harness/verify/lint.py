@@ -14,7 +14,11 @@ STAGE = "lint"
 _ALLOWED_DUNDERS = {"__init__"}
 
 
-def lint(code: str, max_weight: float) -> list[Violation]:
+def lint(code: str, max_weight: float, ctx_max_weight: float | None = None) -> list[Violation]:
+    """max_weight: 위반 판정 기준 비중 상한.
+    ctx_max_weight: 코드 안의 `ctx.max_weight` 가 실제로 가질 값 (기본: max_weight).
+    대조군은 하네스가 상한을 주입하지 않으므로 1.0 으로 계산해 '실제로 얼마를 사려 했는지' 를 본다.
+    """
     try:
         tree = ast.parse(code, filename="strategy.py")
     except SyntaxError as e:
@@ -24,7 +28,8 @@ def lint(code: str, max_weight: float) -> list[Violation]:
     found: list[Violation] = []
     found += _check_contract(tree)
     found += _check_forbidden(tree, set(cfg["sandbox"]["allowed_imports"]), set(cfg["sandbox"]["forbidden_names"]))
-    found += _check_orders(tree, max_weight, cfg["risk"]["stop_loss"])
+    ctx_value = max_weight if ctx_max_weight is None else ctx_max_weight
+    found += _check_orders(tree, max_weight, ctx_value, cfg["risk"]["stop_loss"])
     return _dedupe(found)
 
 
@@ -75,7 +80,7 @@ def _check_forbidden(tree: ast.Module, allowed_imports: set[str], forbidden: set
 
 # ---------------------------------------------------------------- R-001/R-002/R-006 주문
 
-def _check_orders(tree: ast.Module, max_weight: float, stop_cfg: dict) -> list[Violation]:
+def _check_orders(tree: ast.Module, max_weight: float, ctx_value: float, stop_cfg: dict) -> list[Violation]:
     out: list[Violation] = []
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Order"):
@@ -112,10 +117,10 @@ def _check_orders(tree: ast.Module, max_weight: float, stop_cfg: dict) -> list[V
         if weight is None:
             out.append(violation("R-002", STAGE, "매수 주문에 weight 가 없습니다.", line))
             continue
-        bound = _upper_bound(weight, max_weight)
+        bound = _upper_bound(weight, ctx_value)
         if bound is not None:
             if bound > max_weight + 1e-9:
-                out.append(violation("R-002", STAGE, f"비중 {bound:.0%} 가 상한 ctx.max_weight({max_weight:.0%})를 초과합니다.", line))
+                out.append(violation("R-002", STAGE, f"비중 {bound:.0%} 가 상한 {max_weight:.0%} 를 초과합니다.", line))
             elif bound <= 0:
                 out.append(violation("R-002", STAGE, "비중은 0보다 커야 합니다.", line))
         elif not _refs_max_weight(weight):

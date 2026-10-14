@@ -43,13 +43,14 @@ def _command(container: str) -> list[str]:
 
 
 def run_backtest(code: str, bars: list[dict], max_weight: float, symbol: str = "", enforce: bool = True,
-                 timeout_sec: float | None = None) -> SandboxResult:
+                 timeout_sec: float | None = None, ctx_max_weight: float | None = None) -> SandboxResult:
     cfg = load_rules()
     req = {
         "code": code,
         "bars": bars,
         "symbol": symbol,
         "max_weight": max_weight,
+        "ctx_max_weight": max_weight if ctx_max_weight is None else ctx_max_weight,
         "enforce": enforce,
         "stop_min": cfg["risk"]["stop_loss"]["min_distance"],
         "stop_max": cfg["risk"]["stop_loss"]["max_distance"],

@@ -111,6 +111,7 @@ function RunView() {
           <select value={agent} onChange={(e) => setAgent(e.target.value as AgentName)} disabled={running}>
             <option value="mock">Mock (결정론적, 무료)</option>
             <option value="claude">Claude (API 키 필요)</option>
+            <option value="gemini">Gemini (무료 등급)</option>
           </select>
           <button className="primary" onClick={start} disabled={running || !caseId}>{running ? "실행 중…" : "실행"}</button>
         </div>
@@ -360,6 +361,7 @@ function EvalView() {
           <select value={agent} onChange={(e) => setAgent(e.target.value as AgentName)} disabled={busy}>
             <option value="mock">Mock</option>
             <option value="claude">Claude</option>
+            <option value="gemini">Gemini</option>
           </select>
           <button className="primary" onClick={run} disabled={busy}>{busy ? "평가 중…" : "평가 실행"}</button>
         </div>

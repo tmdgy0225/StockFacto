@@ -180,7 +180,9 @@ def _run_control(case, agent, ctx, bars, trace: RunTrace, stage, emit) -> None:
     out = agent.generate(AgentRequest("control", 1, prompts.control_system(), prompts.control_user(case, ctx)))
     stage("execute", "done", 1, input_tokens=out.input_tokens, output_tokens=out.output_tokens)
     # 대조군은 검증 결과와 무관하게 출하된다. 검증기는 관찰 전용(enforce=False)으로 실제 위험을 계측한다.
-    attempt = _verify(1, out.code, out, None, bars, ctx["max_weight"], case["symbol"], enforce=False, stage=stage)
+    # 대조군에는 하네스가 없으므로 ctx.max_weight 를 주입하지 않는다(=계좌 전체 1.0). 위반은 실제 상한으로 계측한다.
+    attempt = _verify(1, out.code, out, None, bars, ctx["max_weight"], case["symbol"], enforce=False, stage=stage,
+                      ctx_max_weight=1.0)
     trace.attempts.append(attempt)
     emit({"type": "attempt", "attempt": asdict(attempt)})
     trace.status, trace.unsafe = "RELEASED", not attempt.passed
@@ -196,11 +198,11 @@ def _resolve_code(out, previous_code: str | None) -> tuple[str, Violation | None
         return previous_code or "", violation("R-008", "patch", str(e))
 
 
-def _verify(n, code, out, previous_code, bars, max_weight, symbol, enforce, stage) -> Attempt:
+def _verify(n, code, out, previous_code, bars, max_weight, symbol, enforce, stage, ctx_max_weight=None) -> Attempt:
     stage_ms: dict[str, int] = {}
     t0 = time.perf_counter()
     stage("lint", "running", n)
-    violations = lint(code, max_weight)
+    violations = lint(code, max_weight, ctx_max_weight)
     stage_ms["lint"] = int((time.perf_counter() - t0) * 1000)
     metrics, curve = None, []
 
@@ -213,7 +215,7 @@ def _verify(n, code, out, previous_code, bars, max_weight, symbol, enforce, stag
     else:
         stage("lint", "fail" if violations else "pass", n, violations=[v.to_dict() for v in violations])
         stage("sandbox", "running", n)
-        result = run_backtest(code, bars, max_weight, symbol, enforce=enforce)
+        result = run_backtest(code, bars, max_weight, symbol, enforce=enforce, ctx_max_weight=ctx_max_weight)
         stage_ms["sandbox"] = result.duration_ms
         metrics, curve = result.metrics, result.equity_curve
         violations += result.violations

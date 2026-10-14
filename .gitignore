@@ -12,3 +12,6 @@ frontend/dist/
 # Env / 개인 설정
 .env
 CLAUDE.local.md
+
+# Claude Code 개인 설정
+.claude/settings.local.json
