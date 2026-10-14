@@ -111,8 +111,8 @@
       "id": "F-18",
       "area": "eval",
       "title": "실제 LLM 실측 A/B 평가 (Gemini / Claude)",
-      "status": "in-progress",
-      "note": "Gemini 에이전트 추가(gemini-3.5-flash, 무료 등급). CASE-01 실측 완료(대조군 100% 매수·MDD 39.8% → 하네스 5%·2.2%). 20개 전체 실측 진행 중. Claude 는 API 키 없음"
+      "status": "done",
+      "note": "Gemini(gemini-3.5-flash) 20개 실측 완료, 오류 0건: 위험 코드 방출률 대조군 100% → 하네스 0%, 대조군 MDD>10% 7건, 하네스 첫 시도 통과 19/20, Self-Healing 1/1, 재시도 토큰 55% 절감(표본 1건). 결과: backend/runs/eval_report_gemini.json"
     },
     {
       "id": "F-19",

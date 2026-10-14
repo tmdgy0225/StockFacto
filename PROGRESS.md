@@ -10,9 +10,17 @@
 - 테스트 73개 통과.
 - CI(backend · sandbox-docker · frontend) 전부 통과 — F-19 Docker 샌드박스 검증 완료 (커밋 51fa36b).
 - 테스트 80개 통과. README 를 보고서 겸 실행 설명서로 재작성.
-- **다음 작업**: Gemini 20개 전체 실측 결과를 README 7.3절 빈칸에 기입, 검증 세금 사람 측정(7.4절), 발표 자료.
-- **참고**: Gemini 20개 평가는 `backend/runs/eval_report_gemini.json` 으로 저장되도록 실행해 둠. 파일이 없으면
-  `python -m harness.eval --agent gemini --compare-healing --out runs/eval_report_gemini.json` 로 다시 실행.
+- **Gemini 20개 실측 완료** (README 7.3절): 위험 코드 방출률 대조군 100% → 하네스 0%, 하네스 첫 시도 통과 19/20.
+- **다음 작업**: 검증 세금 사람 측정(`python -m harness.vtax`, README 7.4절), 발표 자료.
+
+## 2026-10-14 (2)
+
+- 첫 Gemini 20개 평가 실패: 무료 등급 모델당 하루 20회 한도 + 평가 2개 동시 실행 → 3번째 케이스부터 429 (실패 기록 F12).
+- 결제(유료 등급) 적용 후 재실행 성공 (`runs/eval_report_gemini.json`, 에이전트 오류 0건).
+  - 대조군: 20/20 위험(R-002 20건, R-003 7건 MDD 10~43%, R-006 6건).
+  - 하네스: 20/20 통과, 첫 시도 19건. Self-Healing 은 CASE-16 1건(min() 비중 우회 → patch 로 수정)뿐이라 성공률·토큰 절감(55%)은 표본 1건.
+  - Mock 의 "고집 케이스"(08, 10, 15)도 실제 Gemini 는 첫 시도 통과.
+- 검증 세금 측정 도구 `harness/vtax.py` 추가, README 를 보고서 겸 실행 설명서로 정리.
 
 ## 2026-10-14
 
